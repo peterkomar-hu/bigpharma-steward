@@ -1,0 +1,87 @@
+import numpy as np
+import scipy
+
+
+def load_image(path):
+    return scipy.misc.imread(path)
+
+
+def identify_image(im):
+    """
+    Decides if the image is a screen shot of the Cures screen
+    or the Ingredients screen.
+    im is a numpy array of 3 dimensions, encoding the screen shot
+    """
+    score_cures = np.mean(im[1025:1065, 1130:1180, 0])
+    score_ingredients = np.mean(im[1025:1065, 675:720, 0])
+    if score_cures < 177.5:
+        return 'cures'
+    if score_ingredients < 177.5:
+        return 'ingredients'
+    else:
+        return 'other'
+
+
+def cut_main_screen(im):
+    """
+    Selects the main screen from the screen shots of the Cures and
+    the Ingredients screens.
+    """
+    top = 0
+    left = 0
+    bottom = 980
+    right = 1350
+    return im[top:bottom, left:right].copy()
+
+
+def make_bw(im):
+    """
+    Transforms the image into black-and-white,
+    encoded by -1 and +1 values, respectively.
+    """
+    th = 150
+    im_gray = np.mean(im, axis=2)
+    im_binary = im_gray > th
+    boolean_to_numbers = lambda b: 1 if b else -1
+    v_boolean_to_numbers = np.vectorize(boolean_to_numbers)
+    return v_boolean_to_numbers(im_binary)
+
+
+def center_of_mass(im_binary, x_offset=0, y_offset=0):
+    """
+    Calculates the center of mass of a boolean array.
+    True entries are counted with weight 1,
+    False entries are counted with weight 0.
+    (The optional offsets allows shifting the coordinates.)
+    """
+    n = np.sum(im_binary)
+
+    x = np.arange(im_binary.shape[1])
+    y = np.arange(im_binary.shape[0])
+    xv, yv = np.meshgrid(x, y)
+    cx = np.sum(xv[im_binary]) / n + x_offset
+    cy = np.sum(yv[im_binary]) / n + y_offset
+
+    return cx, cy
+
+
+def find_shapes(im_bw, kernel, th):
+    """
+    Finds the centers of mass of the shapes identified to be
+    matching with the kernel using convolution and thresholding.
+    """
+    im_convolved = scipy.ndimage.filters.convolve(im_bw, kernel[::-1, ::-1])
+    im_hotspots = im_convolved >= th
+    bin_dy, bin_dx = kernel.shape
+    radius_x = bin_dx / 2
+    radius_y = bin_dy / 2
+    positions = []
+    open_for_interpretation = np.ones_like(im_convolved, dtype=bool)
+    for x in range(im_hotspots.shape[1]):
+        for y in range(im_hotspots.shape[0]):
+            if open_for_interpretation[y, x] and im_hotspots[y, x]:
+                window = im_hotspots[y - bin_dy: y + bin_dy, x - bin_dx: x + bin_dx]
+                cx, cy = center_of_mass(window, x_offset=x - bin_dx, y_offset=y - bin_dy)
+                positions.append([cx, cy])
+                open_for_interpretation[y - bin_dy: y + bin_dy, x - bin_dx: x + bin_dx] = False
+    return positions
