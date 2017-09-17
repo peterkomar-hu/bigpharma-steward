@@ -175,6 +175,26 @@ def cut_price(box):
     return box[int(y) - height // 2:int(y) + height // 2, int(x) + padding:]
 
 
+def cut_concentration(process_box):
+    """
+    Selects the part of the image that contain concentration range,
+    using the position of the flask icon in a process box,
+    from the Cures screen.
+    """
+    bw = bio.make_bw(process_box)
+    kernel = np.load('./kernels/flask.npy')
+    flask_center = bio.find_shapes(bw, kernel, 500)
+    if len(flask_center) != 1:
+        return None
+    x, y = flask_center[0]
+    height = 20
+    padding = 5
+    length = 60
+    return process_box[
+            int(y) - height // 2 : int(y) + height // 2 + 2,
+            int(x) - length - padding : int(x) - padding]
+
+
 def read_integer(im_segment, tmp_dir='./tmp/', th=200):
     """
     Recognize a single integer in a segmented image.
@@ -234,6 +254,11 @@ def read_integer_range(im_segment, tmp_dir='./tmp/', th=150):
 def read_cure_price(cure_box, tmp_dir='./tmp/', th=200):
     price_box = cut_price(cure_box)
     return read_integer(price_box, tmp_dir=tmp_dir, th=th)
+
+
+def read_concentration(process_box):
+    conc_box = cut_concentration(process_box)
+    return read_integer_range(conc_box)
 
 
 def read_cure_slider(slider):
