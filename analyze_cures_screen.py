@@ -113,13 +113,16 @@ def cut_boxes(im):
 
 
 def read_cure_name(im_segment, known_cures, tmp_dir='./tmp/'):
+    """
+    Recognize the name of the cure, with the aid of a
+    list of known cure names
+    """
     tmp_path = tmp_dir + 'tmp.png'
     tmp_gray_path = tmp_dir + 'tmp-gray.png'
     io.imsave(tmp_path, im_segment)
     colored = cv2.imread(tmp_path)
     gray = cv2.cvtColor(colored, cv2.COLOR_BGR2GRAY)
-    gray = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY | cv2.THRESH_OTSU)[1]
-
+    gray = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY)[1]
     cv2.imwrite(tmp_gray_path, gray)
 
     raw_text = pytesseract.image_to_string(Image.open(tmp_gray_path))
@@ -130,3 +133,44 @@ def read_cure_name(im_segment, known_cures, tmp_dir='./tmp/'):
         matches.append((match_score, cure))
     best_score, best_text = max(matches, key=lambda t: t[0])
     return raw_text, best_text, best_score
+
+
+def cut_price(box):
+    """
+    Selects the part of the image that contains
+    the price of the cure after the dollar sign
+    """
+    kernel = np.load('./kernels/dollar.npy')
+    th = 650
+    bw = bio.make_bw(box)
+
+    dollar_centers = bio.find_shapes(bw, kernel, th)
+    assert len(dollar_centers) == 1
+    x, y = dollar_centers[0]
+
+    height = 20
+    padding = 10
+    return box[int(y) - height // 2:int(y) + height // 2, int(x) + padding:]
+
+
+def read_numbers(im_segment, tmp_dir='./tmp/'):
+    """
+    Recognize a single integer in a segmented image.
+    """
+    tmp_path = tmp_dir + 'tmp_number.png'
+    tmp_gray_path = tmp_dir + 'tmp_number-gray.png'
+    io.imsave(tmp_path, im_segment)
+    colored = cv2.imread(tmp_path)
+    gray = cv2.cvtColor(colored, cv2.COLOR_BGR2GRAY)
+    gray = cv2.threshold(gray, 220, 255, cv2.THRESH_BINARY)[1]
+
+    cv2.imwrite(tmp_gray_path, gray)
+
+    text = pytesseract.image_to_string(Image.open(tmp_gray_path),
+                                       config='-psm 6 outputbase digits')
+    list_of_digist = []
+    for c in text:
+        if c.isdigit():
+            list_of_digist.append(c)
+
+    return int(''.join(list_of_digist))

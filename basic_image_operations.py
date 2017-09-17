@@ -56,11 +56,11 @@ def center_of_mass(im_binary, x_offset=0, y_offset=0):
     """
     n = np.sum(im_binary)
 
-    x = np.arange(im_binary.shape[1])
-    y = np.arange(im_binary.shape[0])
+    x = np.arange(im_binary.shape[1]) + x_offset
+    y = np.arange(im_binary.shape[0]) + y_offset
     xv, yv = np.meshgrid(x, y)
-    cx = np.sum(xv[im_binary]) / n + x_offset
-    cy = np.sum(yv[im_binary]) / n + y_offset
+    cx = np.sum(xv[im_binary]) / n
+    cy = np.sum(yv[im_binary]) / n
 
     return cx, cy
 
@@ -73,15 +73,15 @@ def find_shapes(im_bw, kernel, th):
     im_convolved = scipy.ndimage.filters.convolve(im_bw, kernel[::-1, ::-1])
     im_hotspots = im_convolved >= th
     bin_dy, bin_dx = kernel.shape
-    radius_x = bin_dx / 2
-    radius_y = bin_dy / 2
+    radius_x = bin_dx // 2
+    radius_y = bin_dy // 2
     positions = []
     open_for_interpretation = np.ones_like(im_convolved, dtype=bool)
     for x in range(im_hotspots.shape[1]):
         for y in range(im_hotspots.shape[0]):
             if open_for_interpretation[y, x] and im_hotspots[y, x]:
-                window = im_hotspots[y - bin_dy: y + bin_dy, x - bin_dx: x + bin_dx]
-                cx, cy = center_of_mass(window, x_offset=x - bin_dx, y_offset=y - bin_dy)
+                window = im_hotspots[y - radius_y: y + radius_y, x - radius_x: x + radius_x]
+                cx, cy = center_of_mass(window, x_offset=x - radius_x, y_offset=y - radius_y)
                 positions.append([cx, cy])
-                open_for_interpretation[y - bin_dy: y + bin_dy, x - bin_dx: x + bin_dx] = False
+                open_for_interpretation[y - radius_y: y + radius_y, x - radius_x: x + radius_x] = False
     return positions
