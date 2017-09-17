@@ -75,6 +75,21 @@ def center_of_mass(im_binary, x_offset=0, y_offset=0):
     return cx, cy
 
 
+def recognize_color(color, palette):
+    """
+    Finds which of the RBG values in palette dict is color
+    the closest, and out returns its key.
+    """
+    min_distance = np.inf
+    most_similar_color = None
+    for cname, cvalue in palette.items():
+        distance = np.sum(np.abs(np.array(color) - np.array(cvalue)))
+        if distance < min_distance:
+            min_distance = distance
+            most_similar_color = cname
+    return most_similar_color
+
+
 def find_shapes(im_bw, kernel, th):
     """
     Finds the centers of mass of the shapes identified to be

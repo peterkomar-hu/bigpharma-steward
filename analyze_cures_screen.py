@@ -234,3 +234,91 @@ def read_integer_range(im_segment, tmp_dir='./tmp/', th=150):
 def read_cure_price(cure_box, tmp_dir='./tmp/', th=200):
     price_box = cut_price(cure_box)
     return read_integer(price_box, tmp_dir=tmp_dir, th=th)
+
+
+def read_cure_slider(slider):
+    """
+    Determines min, max and optimal effective concentration,
+    using the colors of the teeth of the slider.
+    """
+    palette = {
+        'gray': [139, 148, 151],
+        'yellow': [250, 255, 156],
+        'lighter_blue': [99, 255, 252],
+        'green': [101, 234, 108],
+        'blue': [102, 236, 231],
+        'purple': [214, 166, 255],
+        'orange': [254, 167, 89]
+    }
+    colors = []
+    for idx in range(0, 20):
+        x = idx * 12
+        teeth = slider[2:14, x + 2:x + 9]
+        color = np.mean(np.mean(teeth, axis=0), axis=0)
+        color_name = bio.recognize_color(color, palette)
+        colors.append(color_name)
+    if 'green' in colors:
+        del (palette['blue'])
+    else:
+        del (palette['lighter_blue'])
+    colors = []
+    for idx in range(0, 20, 1):
+        x = idx * 12
+        teeth = slider[2:14, x + 2:x + 9]
+        color = np.mean(np.mean(teeth, axis=0), axis=0)
+        color_name = bio.recognize_color(color, palette)
+        colors.append(color_name)
+
+    effect_colors = ['green', 'blue', 'purple', 'orange', 'yellow']
+    conc_low = None
+    conc_optimal = None
+    conc_high = None
+    for idx, cname in enumerate(colors):
+        conc = idx + 1
+        if cname in effect_colors:
+            conc_high = conc
+            if conc_low is None:
+                conc_low = conc
+        if cname == 'yellow':
+            conc_optimal = conc
+
+    return [conc_low, conc_high], conc_optimal
+
+
+def read_hoover_cure_concentrations(box):
+    box_bw = bio.make_bw(box)
+
+    active_range_text_kernel = np.load('./kernels/Active-Range-text.npy')
+    active_range_text_position = bio.find_shapes(box_bw, active_range_text_kernel, 1850)
+    assert len(active_range_text_position) == 1
+
+    max_text_kernel = np.load('./kernels/Max-text.npy')
+    max_text_position = bio.find_shapes(box_bw, max_text_kernel, 700)
+    assert len(max_text_position) == 1
+
+    flask_kernel = np.load('./kernels/flask.npy')
+    flask_positions = bio.find_shapes(box_bw, flask_kernel, 500)
+    assert len(flask_positions) == 2
+
+    arx, ary = active_range_text_position[0]
+    mx, my = max_text_position[0]
+    f1x, f1y = flask_positions[0]
+    f2x, f2y = flask_positions[1]
+
+    range_coordinates = [[arx + 50, f1x - 12], [ary - 10, ary + 10]]
+    max_coordinates = [[mx + 20, f2x - 12], [my - 10, my + 10]]
+    slider_coordinates = [[arx - 51, arx + 189], [ary + 25, ary + 42]]
+
+    conc_range = read_integer_range(bio.cut(box, range_coordinates))
+    conc_optimal = read_integer(bio.cut(box, max_coordinates))
+
+    conc_range_slider, conc_optimal_slider = read_cure_slider(bio.cut(box, slider_coordinates))
+
+    if conc_range[0] != conc_range_slider[0]:
+        conc_range[0] = None
+    if conc_range[1] != conc_range_slider[1]:
+        conc_range[1] = None
+    if conc_optimal != conc_optimal_slider:
+        conc_optimal = None
+
+    return conc_range, conc_optimal
