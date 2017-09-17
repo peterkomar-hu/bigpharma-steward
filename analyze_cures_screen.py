@@ -112,17 +112,18 @@ def cut_boxes(im):
     return columns_of_boxes, columns_of_box_identities
 
 
-def read_cure_name(im_segment, known_cures, tmp_dir='./tmp/'):
+def read_cure_name(cure_box, known_cures, tmp_dir='./tmp/', th=167):
     """
     Recognize the name of the cure, with the aid of a
     list of known cure names
     """
     tmp_path = tmp_dir + 'tmp.png'
     tmp_gray_path = tmp_dir + 'tmp-gray.png'
+    im_segment = cure_box[:, :200, :]
     io.imsave(tmp_path, im_segment)
     colored = cv2.imread(tmp_path)
     gray = cv2.cvtColor(colored, cv2.COLOR_BGR2GRAY)
-    gray = cv2.threshold(gray, 170, 255, cv2.THRESH_BINARY)[1]
+    gray = cv2.threshold(gray, th, 255, cv2.THRESH_BINARY)[1]
     cv2.imwrite(tmp_gray_path, gray)
 
     raw_text = pytesseract.image_to_string(Image.open(tmp_gray_path))
@@ -153,7 +154,7 @@ def cut_price(box):
     return box[int(y) - height // 2:int(y) + height // 2, int(x) + padding:]
 
 
-def read_numbers(im_segment, tmp_dir='./tmp/'):
+def read_integer(im_segment, tmp_dir='./tmp/', th=200):
     """
     Recognize a single integer in a segmented image.
     """
@@ -162,15 +163,46 @@ def read_numbers(im_segment, tmp_dir='./tmp/'):
     io.imsave(tmp_path, im_segment)
     colored = cv2.imread(tmp_path)
     gray = cv2.cvtColor(colored, cv2.COLOR_BGR2GRAY)
-    gray = cv2.threshold(gray, 220, 255, cv2.THRESH_BINARY)[1]
+    gray = cv2.threshold(gray, th, 255, cv2.THRESH_BINARY)[1]
 
     cv2.imwrite(tmp_gray_path, gray)
 
     text = pytesseract.image_to_string(Image.open(tmp_gray_path),
                                        config='-psm 6 outputbase digits')
-    list_of_digist = []
+    list_of_digits = []
     for c in text:
         if c.isdigit():
-            list_of_digist.append(c)
+            list_of_digits.append(c)
 
-    return int(''.join(list_of_digist))
+    try:
+        number = int(''.join(list_of_digits))
+    except ValueError:
+        number = np.nan
+    return number
+
+
+def read_integer_range(im_segment, tmp_dir='./tmp/', th=200):
+    """
+    Recognizes an integer range, such as "13-17"
+    in a segmented image.
+    """
+    tmp_path = tmp_dir + 'tmp_number.png'
+    tmp_gray_path = tmp_dir + 'tmp_number-gray.png'
+    io.imsave(tmp_path, im_segment)
+    colored = cv2.imread(tmp_path)
+    gray = cv2.cvtColor(colored, cv2.COLOR_BGR2GRAY)
+    gray = cv2.threshold(gray, th, 255, cv2.THRESH_BINARY)[1]
+
+    cv2.imwrite(tmp_gray_path, gray)
+
+    text = pytesseract.image_to_string(Image.open(tmp_gray_path),
+                                       config='-psm 6 outputbase digits')
+    numbers = text.split('-')
+    assert len(numbers) == 2
+    start, end = [int(num) for num in numbers]
+    return start, end
+
+
+def read_cure_price(cure_box, tmp_dir='./tmp/', th=200):
+    price_box = cut_price(cure_box)
+    return read_integer(price_box, tmp_dir=tmp_dir, th=th)

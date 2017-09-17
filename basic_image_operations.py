@@ -1,6 +1,6 @@
 import numpy as np
 import scipy
-
+from skimage import io, filters
 
 def load_image(path):
     return scipy.misc.imread(path)
@@ -45,6 +45,16 @@ def make_bw(im):
     boolean_to_numbers = lambda b: 1 if b else -1
     v_boolean_to_numbers = np.vectorize(boolean_to_numbers)
     return v_boolean_to_numbers(im_binary)
+
+
+def cut(im, corners_xy):
+    x_list, y_list = corners_xy
+    x1, x2 = x_list
+    y1, y2 = y_list
+    if len(im.shape) == 2:
+        return im[int(y1):int(y2), int(x1):int(x2)]
+    elif len(im.shape) == 3:
+        return im[int(y1):int(y2), int(x1):int(x2), :]
 
 
 def center_of_mass(im_binary, x_offset=0, y_offset=0):
