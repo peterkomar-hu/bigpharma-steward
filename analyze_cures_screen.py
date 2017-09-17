@@ -8,16 +8,27 @@ pytesseract.pytesseract.tesseract_cmd = 'C:/Program Files (x86)/Tesseract-OCR/te
 import cv2
 from difflib import SequenceMatcher
 
+
+def identify_gap(gap, cure_box_gap, process_box_gap):
+    if abs(gap - cure_box_gap) < 10:
+        return 'cure'
+    if abs(gap - process_box_gap) < 10:
+        return 'process'
+    else:
+        return 'gap'
+
+
 def cut_boxes(im):
     """
     Locates effect boxes and process boxes on the b&w
     screen shot of the Cures screen.
     """
+    im_main_screen = bio.cut_main_screen(im)
+    im_bw = bio.make_bw(im_main_screen)
+
     # find triangles
     kernel = np.load('./kernels/triangle.npy')
-    th = 950
-    im_bw = bio.make_bw(im)
-    triangle_centers = bio.find_shapes(im_bw, kernel, th)
+    triangle_centers = bio.find_shapes(im_bw, kernel, 950)
     triangle_centers.sort()
 
     # group triangles into columns
@@ -29,13 +40,13 @@ def cut_boxes(im):
         else:
             columns_of_triangles.append([triangle])
 
-    drug_box_height = 63
+    cure_box_height = 63
     process_box_height = 125
     box_width = 290
     padding = 15
     last_padding = 22
 
-    drug_box_gap = drug_box_height + 2 * padding
+    cure_box_gap = cure_box_height + 2 * padding
     process_box_gap = process_box_height + 2 * padding
 
     columns_of_box_identities = []  # 'drug' or 'process'
@@ -51,54 +62,64 @@ def cut_boxes(im):
         columns_of_box_coordinates.append(box_coordinates)
         for i in range(len(col) - 1):
 
-            # get box
-            y1 = col[i][1] + padding
-            y2 = col[i + 1][1] - padding
-            x1 = col[i][0] - box_width // 2
-            x2 = col[i][0] + box_width // 2
-            box_coordinates.append((x1, x2, y1, y2))
-
             gap = col[i + 1][1] - col[i][1]
-            if abs(gap - drug_box_gap) < abs(gap - process_box_gap):
-                box_identities.append('cure')
+            gap_identity = identify_gap(gap, cure_box_gap, process_box_gap)
+            if gap_identity in ['cure', 'process']:
+                box_identities.append(gap_identity)
+                y1 = col[i][1] + padding
+                y2 = col[i + 1][1] - padding
+                x1 = col[i][0] - box_width // 2
+                x2 = col[i][0] + box_width // 2
+                box_coordinates.append((x1, x2, y1, y2))
+
             else:
-                box_identities.append('process')
+                box_identities.append('cure')
+                x, y = col[i]
+                y1 = y + last_padding
+                y2 = y + last_padding + cure_box_height
+                x1 = x - box_width // 2
+                x2 = x + box_width // 2
+                box_coordinates.append((x1, x2, y1, y2))
 
-        # first box identity revision
-        if box_identities[0] == 'process':
-            box_identities.insert(0, 'cure')
-        else:
-            box_identities.insert(0, 'process')
+                box_identities.append('cure')
+                x, y = col[i + 1]
+                y1 = y - padding - cure_box_height
+                y2 = y - padding
+                x1 = x - box_width // 2
+                x2 = x + box_width // 2
+                box_coordinates.append((x1, x2, y1, y2))
 
-        # last box identity revision
-        if box_identities[-1] == 'process':
-            box_identities.append('cure')
-        else:
-            box_identities.append('process')
-
-        # first box coordinate revision
+        # revise first box revision
         if box_identities[0] == 'cure':
-            box_height = drug_box_height
-        elif box_identities[0] == 'process':
+            box_identity = 'process'
             box_height = process_box_height
+        elif box_identities[0] == 'process':
+            box_identity = 'cure'
+            box_height = cure_box_height
         x, y = col[0]
         y1 = y - padding - box_height
         y2 = y - padding
         x1 = x - box_width // 2
         x2 = x + box_width // 2
-        box_coordinates.insert(0, (x1, x2, y1, y2))
+        if y1 > 0 and y2 < im_main_screen.shape[0]:
+            box_identities.insert(0, box_identity)
+            box_coordinates.insert(0, (x1, x2, y1, y2))
 
-        # last box coordinate revision
+        # revise last box
         if box_identities[-1] == 'cure':
-            box_height = drug_box_height
-        elif box_identities[-1] == 'process':
+            box_identity = 'process'
             box_height = process_box_height
+        elif box_identities[-1] == 'process':
+            box_identity = 'cure'
+            box_height = cure_box_height
         x, y = col[-1]
         y1 = y + last_padding
         y2 = y + last_padding + box_height
         x1 = x - box_width // 2
         x2 = x + box_width // 2
-        box_coordinates.append((x1, x2, y1, y2))
+        if y1 > 0 and y2 < im_main_screen.shape[0]:
+            box_identities.append(box_identity)
+            box_coordinates.append((x1, x2, y1, y2))
 
     # cut from image
     columns_of_boxes = []
@@ -107,7 +128,7 @@ def cut_boxes(im):
         columns_of_boxes.append(boxes)
         for box_coord in box_coordinates:
             x1, x2, y1, y2 = box_coord
-            boxes.append(im[int(y1):int(y2), int(x1):int(x2), :])
+            boxes.append(im_main_screen[int(y1):int(y2), int(x1):int(x2), :])
 
     return columns_of_boxes, columns_of_box_identities
 
