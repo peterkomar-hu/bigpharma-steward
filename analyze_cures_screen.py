@@ -168,7 +168,7 @@ def read_integer(im_segment, tmp_dir='./tmp/', th=200):
     cv2.imwrite(tmp_gray_path, gray)
 
     text = pytesseract.image_to_string(Image.open(tmp_gray_path),
-                                       config='-psm 6 outputbase digits')
+                                       config='digits -psm 6')
     list_of_digits = []
     for c in text:
         if c.isdigit():
@@ -177,11 +177,11 @@ def read_integer(im_segment, tmp_dir='./tmp/', th=200):
     try:
         number = int(''.join(list_of_digits))
     except ValueError:
-        number = np.nan
+        number = None
     return number
 
 
-def read_integer_range(im_segment, tmp_dir='./tmp/', th=200):
+def read_integer_range(im_segment, tmp_dir='./tmp/', th=150):
     """
     Recognizes an integer range, such as "13-17"
     in a segmented image.
@@ -196,11 +196,18 @@ def read_integer_range(im_segment, tmp_dir='./tmp/', th=200):
     cv2.imwrite(tmp_gray_path, gray)
 
     text = pytesseract.image_to_string(Image.open(tmp_gray_path),
-                                       config='-psm 6 outputbase digits')
-    numbers = text.split('-')
-    assert len(numbers) == 2
-    start, end = [int(num) for num in numbers]
-    return start, end
+                                       config='digits -psm 6')
+    lists_of_digits = text.split('-')
+    if len(lists_of_digits) != 2:
+        return [None, None]
+    numbers = []
+    for digits in lists_of_digits:
+        try:
+            number = int(''.join(digits))
+        except ValueError:
+            number = None
+        numbers.append(number)
+    return numbers
 
 
 def read_cure_price(cure_box, tmp_dir='./tmp/', th=200):
