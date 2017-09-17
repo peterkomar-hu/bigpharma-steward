@@ -167,9 +167,9 @@ def cut_price(box):
     bw = bio.make_bw(box)
 
     dollar_centers = bio.find_shapes(bw, kernel, th)
-    assert len(dollar_centers) == 1
+    if len(dollar_centers) != 1:
+        return None
     x, y = dollar_centers[0]
-
     height = 20
     padding = 10
     return box[int(y) - height // 2:int(y) + height // 2, int(x) + padding:]
@@ -189,7 +189,7 @@ def read_integer(im_segment, tmp_dir='./tmp/', th=200):
     cv2.imwrite(tmp_gray_path, gray)
 
     text = pytesseract.image_to_string(Image.open(tmp_gray_path),
-                                       config='digits -psm 6')
+                                       config='-psm 6 digits')
     list_of_digits = []
     for c in text:
         if c.isdigit():
@@ -217,7 +217,7 @@ def read_integer_range(im_segment, tmp_dir='./tmp/', th=150):
     cv2.imwrite(tmp_gray_path, gray)
 
     text = pytesseract.image_to_string(Image.open(tmp_gray_path),
-                                       config='digits -psm 6')
+                                       config='-psm 6 digits')
     lists_of_digits = text.split('-')
     if len(lists_of_digits) != 2:
         return [None, None]
@@ -285,8 +285,8 @@ def read_cure_slider(slider):
     return [conc_low, conc_high], conc_optimal
 
 
-def read_hoover_cure_concentrations(box):
-    box_bw = bio.make_bw(box)
+def read_hoover_cure_concentrations(cure_box):
+    box_bw = bio.make_bw(cure_box)
 
     active_range_text_kernel = np.load('./kernels/Active-Range-text.npy')
     active_range_text_position = bio.find_shapes(box_bw, active_range_text_kernel, 1850)
@@ -309,10 +309,10 @@ def read_hoover_cure_concentrations(box):
     max_coordinates = [[mx + 20, f2x - 12], [my - 10, my + 10]]
     slider_coordinates = [[arx - 51, arx + 189], [ary + 25, ary + 42]]
 
-    conc_range = read_integer_range(bio.cut(box, range_coordinates))
-    conc_optimal = read_integer(bio.cut(box, max_coordinates))
+    conc_range = read_integer_range(bio.cut(cure_box, range_coordinates))
+    conc_optimal = read_integer(bio.cut(cure_box, max_coordinates))
 
-    conc_range_slider, conc_optimal_slider = read_cure_slider(bio.cut(box, slider_coordinates))
+    conc_range_slider, conc_optimal_slider = read_cure_slider(bio.cut(cure_box, slider_coordinates))
 
     if conc_range[0] != conc_range_slider[0]:
         conc_range[0] = None
@@ -322,3 +322,22 @@ def read_hoover_cure_concentrations(box):
         conc_optimal = None
 
     return conc_range, conc_optimal
+
+
+def analyze_cure_box(cure_box, known_cures):
+    """
+    Determines if the cure box is hoovered over or not,
+    and recognizes the information contained within.
+    """
+    info = {}
+    price_box = cut_price(cure_box)
+    if price_box is not None:
+        info['price'] = read_integer(price_box)
+        _, name, _ = read_cure_name(cure_box, known_cures)
+        info['name'] = name
+    else:
+        conc_range, conc_optimal = read_hoover_cure_concentrations(cure_box)
+        info['conc_range'] = tuple(conc_range)
+        info['conc_optimal'] = conc_optimal
+
+    return info
