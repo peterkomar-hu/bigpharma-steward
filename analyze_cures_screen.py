@@ -157,6 +157,8 @@ def read_cure_name(cure_box, known_cures, tmp_dir='./tmp/', th=167):
     return raw_text, best_text, best_score
 
 
+
+
 def cut_price(box):
     """
     Selects the part of the image that contains
@@ -366,3 +368,21 @@ def analyze_cure_box(cure_box, known_cures):
         info['conc_optimal'] = conc_optimal
 
     return info
+
+
+def read_catalyst(process_box):
+    bw = bio.make_bw(process_box)
+    mask = bw[30:90, 10:40] > 0
+    if np.sum(mask) < 50:
+        return 'no catalyst'
+    else:
+        catalyst_palette = {
+            'green': [144,  231, 150],
+            'blue': [64, 230, 227],
+            'purple': [160, 150, 252],
+            'orange': [255, 199, 111],
+            'pink': [255, 107, 236]}
+        catalyst_box = process_box[40:85, 20:70, :]
+        mask = bio.make_bw(catalyst_box, th=170) > 0
+        avg_color = bio.avg_color(catalyst_box, mask)
+        return bio.recognize_color(avg_color, catalyst_palette)

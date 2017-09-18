@@ -34,12 +34,11 @@ def cut_main_screen(im):
     return im[top:bottom, left:right].copy()
 
 
-def make_bw(im):
+def make_bw(im, th=150):
     """
     Transforms the image into black-and-white,
     encoded by -1 and +1 values, respectively.
     """
-    th = 150
     im_gray = np.mean(im, axis=2)
     im_binary = im_gray > th
     boolean_to_numbers = lambda b: 1 if b else -1
@@ -88,6 +87,13 @@ def recognize_color(color, palette):
             min_distance = distance
             most_similar_color = cname
     return most_similar_color
+
+
+def avg_color(im, mask=None):
+    if mask is not None:
+        return [np.mean(im[:, :, rgb_idx][mask]) for rgb_idx in [0, 1, 2]]
+    else:
+        [np.mean(im[:, :, rgb_idx]) for rgb_idx in [0, 1, 2]]
 
 
 def find_shapes(im_bw, kernel, th):
