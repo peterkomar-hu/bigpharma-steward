@@ -157,8 +157,6 @@ def read_cure_name(cure_box, known_cures, tmp_dir='./tmp/', th=167):
     return raw_text, best_text, best_score
 
 
-
-
 def cut_price(box):
     """
     Selects the part of the image that contains
@@ -386,3 +384,44 @@ def read_catalyst(process_box):
         mask = bio.make_bw(catalyst_box, th=170) > 0
         avg_color = bio.avg_color(catalyst_box, mask)
         return bio.recognize_color(avg_color, catalyst_palette)
+
+
+def cut_machine(process_box):
+    kernel = np.load('./kernels/upgrade-with-text.npy')
+    im_bw = bio.make_bw(process_box)
+    upgrade_with_position = bio.find_shapes(im_bw, kernel, th=1750)
+    if len(upgrade_with_position) != 1:
+        return None
+    x, y = upgrade_with_position[0]
+    segment = bio.cut(process_box, [[x-50, x+50], [y+10, y+111]])
+    return segment
+
+
+class MachineRecognizer:
+    def __init__(self):
+        machine_names = [
+            'Dissolver',
+            'Evaporator',
+            'Ioniser',
+            'Agglomerator',
+            'Autoclave',
+            'Cryogenic-Condenser',
+            'Sequencer',
+            'Chromatograph',
+            'Ultraviolet-Curer',
+            'Hadron-Collider'
+        ]
+        self.machine_dict = {}
+        for name in machine_names:
+            image = np.load('./kernels/' + name + '.npy')
+            self.machine_dict[name] = image
+
+    def recognize_machine(self, segment):
+        min_distance = np.inf
+        closest_machine = None
+        for name, image in self.machine_dict.items():
+            distance = np.sum(image - segment)
+            if distance < min_distance:
+                min_distance = distance
+                closest_machine = name
+        return closest_machine
