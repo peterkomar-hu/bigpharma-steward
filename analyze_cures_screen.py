@@ -175,26 +175,6 @@ def cut_price(box):
     return box[int(y) - height // 2:int(y) + height // 2, int(x) + padding:]
 
 
-def cut_concentration(process_box):
-    """
-    Selects the part of the image that contain concentration range,
-    using the position of the flask icon in a process box,
-    from the Cures screen.
-    """
-    bw = bio.make_bw(process_box)
-    kernel = np.load('./kernels/flask.npy')
-    flask_center = bio.find_shapes(bw, kernel, 500)
-    if len(flask_center) != 1:
-        return None
-    x, y = flask_center[0]
-    height = 20
-    padding = 5
-    length = 60
-    return process_box[
-            int(y) - height // 2 : int(y) + height // 2 + 2,
-            int(x) - length - padding : int(x) - padding]
-
-
 def read_integer(im_segment, tmp_dir='./tmp/', th=200):
     """
     Recognize a single integer in a segmented image.
@@ -222,7 +202,7 @@ def read_integer(im_segment, tmp_dir='./tmp/', th=200):
     return number
 
 
-def read_integer_range(im_segment, tmp_dir='./tmp/', th=150):
+def read_integer_range(im_segment, tmp_dir='./tmp/', th=170):
     """
     Recognizes an integer range, such as "13-17"
     in a segmented image.
@@ -254,11 +234,6 @@ def read_integer_range(im_segment, tmp_dir='./tmp/', th=150):
 def read_cure_price(cure_box, tmp_dir='./tmp/', th=200):
     price_box = cut_price(cure_box)
     return read_integer(price_box, tmp_dir=tmp_dir, th=th)
-
-
-def read_concentration(process_box):
-    conc_box = cut_concentration(process_box)
-    return read_integer_range(conc_box)
 
 
 def read_cure_slider(slider):
@@ -368,38 +343,17 @@ def analyze_cure_box(cure_box, known_cures):
     return info
 
 
-def read_catalyst(process_box):
-    bw = bio.make_bw(process_box)
-    mask = bw[30:90, 10:40] > 0
-    if np.sum(mask) < 50:
-        return 'no catalyst'
-    else:
-        catalyst_palette = {
-            'green': [144,  231, 150],
+class ProcessBoxReader:
+    def __init__(self):
+        self.upgrade_with_text_kernel = np.load('./kernels/upgrade-with-text.npy')
+        self.flask_kernel = np.load('./kernels/flask.npy')
+        self. catalyst_palette = {
+            'green': [144, 231, 150],
             'blue': [64, 230, 227],
             'purple': [160, 150, 252],
             'orange': [255, 199, 111],
             'pink': [255, 107, 236]}
-        catalyst_box = process_box[40:85, 20:70, :]
-        mask = bio.make_bw(catalyst_box, th=170) > 0
-        avg_color = bio.avg_color(catalyst_box, mask)
-        return bio.recognize_color(avg_color, catalyst_palette)
-
-
-def cut_machine(process_box):
-    kernel = np.load('./kernels/upgrade-with-text.npy')
-    im_bw = bio.make_bw(process_box)
-    upgrade_with_position = bio.find_shapes(im_bw, kernel, th=1750)
-    if len(upgrade_with_position) != 1:
-        return None
-    x, y = upgrade_with_position[0]
-    segment = bio.cut(process_box, [[x-50, x+50], [y+10, y+111]])
-    return segment
-
-
-class MachineRecognizer:
-    def __init__(self):
-        machine_names = [
+        self.machine_names = [
             'Dissolver',
             'Evaporator',
             'Ioniser',
@@ -412,11 +366,22 @@ class MachineRecognizer:
             'Hadron-Collider'
         ]
         self.machine_dict = {}
-        for name in machine_names:
+        for name in self.machine_names:
             image = np.load('./kernels/' + name + '.npy')
             self.machine_dict[name] = image
 
-    def recognize_machine(self, segment):
+    def _cut_machine(self, process_box):
+        kernel = self.upgrade_with_text_kernel
+        im_bw = bio.make_bw(process_box)
+        upgrade_with_position = bio.find_shapes(im_bw, kernel, th=1750)
+        if len(upgrade_with_position) != 1:
+            return None
+        x, y = upgrade_with_position[0]
+        segment = bio.cut(process_box, [[x - 50, x + 50], [y + 10, y + 111]])
+        return segment
+
+    def _recognize_machine(self, process_box):
+        segment = self._cut_machine(process_box)
         min_distance = np.inf
         closest_machine = None
         for name, image in self.machine_dict.items():
@@ -425,3 +390,44 @@ class MachineRecognizer:
                 min_distance = distance
                 closest_machine = name
         return closest_machine
+
+    def _read_catalyst(self, process_box):
+        bw = bio.make_bw(process_box)
+        mask = bw[30:90, 10:40] > 0
+        if np.sum(mask) < 50:
+            return 'no catalyst'
+        else:
+            catalyst_box = process_box[40:85, 20:70, :]
+            mask = bio.make_bw(catalyst_box, th=170) > 0
+            avg_color = bio.avg_color(catalyst_box, mask)
+            return bio.recognize_color(avg_color, self. catalyst_palette)
+
+    def _cut_concentration(self, process_box):
+        """
+        Selects the part of the image that contain concentration range,
+        using the position of the flask icon in a process box,
+        from the Cures screen.
+        """
+        bw = bio.make_bw(process_box)
+        kernel = self.flask_kernel
+        flask_center = bio.find_shapes(bw, kernel, 500)
+        if len(flask_center) != 1:
+            return None
+        x, y = flask_center[0]
+        height = 20
+        padding = 5
+        length = 60
+        return process_box[
+               int(y) - height // 2: int(y) + height // 2 + 2,
+               int(x) - length - padding: int(x) - padding]
+
+    def _read_concentration(self, process_box):
+        conc_box = self._cut_concentration(process_box)
+        return read_integer_range(conc_box)
+
+    def read(self, process_box):
+        info = {}
+        info['machine'] = self._recognize_machine(process_box)
+        info['conc_range'] = self._read_concentration(process_box)
+        info['catalyst'] = self._read_catalyst(process_box)
+        return info
