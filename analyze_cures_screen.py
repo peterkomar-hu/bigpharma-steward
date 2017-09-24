@@ -484,3 +484,31 @@ class ProcessBoxReader:
         info['conc_range'] = self._read_concentration(process_box)
         info['catalyst'] = self._read_catalyst(process_box)
         return info
+
+
+def read_cures_screen(im):
+    """
+    Reads all legible information from a screenshot of the Cures screen.
+     - segments the screen into boxes (cures and processes)
+     - segments the list of boxes into pipelines
+     - reads all available information about each box
+    Returns a list of lists of dicts, where each dict
+    represents the information about a box.
+    """
+    columns_of_boxes, columns_of_box_identities = cut_boxes(im)
+    pipelines = []
+    readers ={
+        'cure': CureBoxReader(),
+        'process': ProcessBoxReader()
+    }
+    for boxes, ids in zip(columns_of_boxes, columns_of_box_identities):
+        prev_type = None
+        for box, identity in zip(boxes, ids):
+            if prev_type == identity or prev_type is None:
+                pipeline = []
+                pipelines.append(pipeline)
+            info = readers[identity].read(box)
+            info['box_type'] = identity
+            pipeline.append(info)
+            prev_type = identity
+    return pipelines
