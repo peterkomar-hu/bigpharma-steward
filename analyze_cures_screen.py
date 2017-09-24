@@ -370,6 +370,11 @@ class ProcessBoxReader:
             image = np.load('./kernels/' + name + '.npy')
             self.machine_dict[name] = image
 
+        self.conc_digits = []
+        for digit in range(0, 10, 1):
+            kernel = np.load('./kernels/conc_' + str(digit) + '_kernel.npy')
+            self.conc_digits.append(kernel)
+
     def _cut_machine(self, process_box):
         kernel = self.upgrade_with_text_kernel
         im_bw = bio.make_bw(process_box)
@@ -423,7 +428,27 @@ class ProcessBoxReader:
 
     def _read_concentration(self, process_box):
         conc_box = self._cut_concentration(process_box)
-        return read_integer_range(conc_box)
+        im_bw = bio.make_bw(conc_box, th=170)
+        digits = []
+        for digit in range(0, 10, 1):
+            kernel = self.conc_digits[digit]
+            positions = bio.find_shapes(im_bw, kernel, th=160)
+            for pos in positions:
+                x = pos[0]
+                digits.append((x, digit))
+        digits.sort()
+        if len(digits) == 2:
+            low = digits[0][1]
+            high = digits[1][1]
+        elif len(digits) == 3:
+            low = digits[0][1]
+            high = 10*digits[1][1] + digits[2][1]
+        elif len(digits) == 4:
+            low = 10*digits[0][1] + digits[1][1]
+            high = 10*digits[2][1] + digits[3][1]
+        else:
+            return [None, None]
+        return [low, high]
 
     def read(self, process_box):
         info = {}
