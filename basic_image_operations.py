@@ -108,11 +108,17 @@ def find_shapes(im_bw, kernel, th):
     radius_y = bin_dy // 2
     positions = []
     open_for_interpretation = np.ones_like(im_convolved, dtype=bool)
-    for x in range(im_hotspots.shape[1]):
-        for y in range(im_hotspots.shape[0]):
+    xmax = im_hotspots.shape[1] - 1
+    ymax = im_hotspots.shape[0] - 1
+    for x in range(xmax + 1):
+        for y in range(ymax + 1):
             if open_for_interpretation[y, x] and im_hotspots[y, x]:
-                window = im_hotspots[y - radius_y: y + radius_y, x - radius_x: x + radius_x]
+                x0 = max(0, x - radius_x)
+                x1 = min(xmax, x + radius_x)
+                y0 = max(0, y - radius_y)
+                y1 = min(ymax, y + radius_y)
+                window = im_hotspots[y0:y1, x0:x1]
                 cx, cy = center_of_mass(window, x_offset=x - radius_x, y_offset=y - radius_y)
                 positions.append([cx, cy])
-                open_for_interpretation[y - radius_y: y + radius_y, x - radius_x: x + radius_x] = False
+                open_for_interpretation[y0:y1, x0:x1] = False
     return positions
