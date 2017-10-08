@@ -426,7 +426,7 @@ class ProcessBoxReader:
         min_distance = np.inf
         closest_machine = None
         for name, image in self.machine_dict.items():
-            distance = np.sum(image - segment)
+            distance = np.sum(np.abs(image - segment))
             if distance < min_distance:
                 min_distance = distance
                 closest_machine = name
