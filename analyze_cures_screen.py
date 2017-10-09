@@ -441,7 +441,7 @@ class ProcessBoxReader:
             catalyst_box = process_box[40:85, 20:70, :]
             mask = bio.make_bw(catalyst_box, th=170) > 0
             avg_color = bio.avg_color(catalyst_box, mask)
-            return bio.recognize_color(avg_color, self. catalyst_palette)
+            return bio.recognize_color(avg_color, self.catalyst_palette)
 
     def _cut_concentration(self, process_box):
         """
