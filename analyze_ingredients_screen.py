@@ -169,7 +169,14 @@ class EffectBoxReader:
             'orange': [255, 199, 111],
             'pink': [255, 107, 236]}
         with open('./kernels/list-of-basic-cures.txt', 'r') as f_cures:
-            self.known_cures = f_cures.read().split('\n')
+            known_cures_names = f_cures.read().split('\n')[:-1]
+
+        self.known_cure_kernels = {}
+        for cure_name in known_cures_names:
+            cure_name_w_hyphens = '-'.join(cure_name.split(' '))
+            kernel_file = './kernels/Cure-text-' + cure_name_w_hyphens + '.npy'
+            kernel = np.load(kernel_file)
+            self.known_cure_kernels[cure_name] = kernel
 
     def _is_empty(self, effect_box):
         bw = bio.make_bw(effect_box)
@@ -239,28 +246,20 @@ class EffectBoxReader:
         }
         return info
 
-    def _read_cure_name(self, effect_box, tmp_dir='./tmp/', th=167):
+    def _read_cure_name(self, effect_box):
         """
         Recognize the name of the cure, with the aid of a
         list of known cure names
         """
-        tmp_path = tmp_dir + 'tmp.png'
-        tmp_gray_path = tmp_dir + 'tmp-gray.png'
-        im_segment = effect_box[:, :200, :]
-        io.imsave(tmp_path, im_segment)
-        colored = cv2.imread(tmp_path)
-        gray = cv2.cvtColor(colored, cv2.COLOR_BGR2GRAY)
-        gray = cv2.threshold(gray, th, 255, cv2.THRESH_BINARY)[1]
-        cv2.imwrite(tmp_gray_path, gray)
-
-        raw_text = pytesseract.image_to_string(Image.open(tmp_gray_path))
-
-        matches = []
-        for cure in self.known_cures:
-            match_score = SequenceMatcher(None, raw_text, cure).ratio()
-            matches.append((match_score, cure))
-        best_score, best_text = max(matches, key=lambda t: t[0])
-        return raw_text, best_text, best_score
+        cure_name_bw = bio.make_bw(effect_box[15:35, 5:200, :], th=132)
+        best_match = None
+        min_distance = np.inf
+        for cure_name, kernel in self.known_cure_kernels.items():
+            distance = np.sum(np.abs(cure_name_bw - kernel))
+            if distance < min_distance:
+                min_distance = distance
+                best_match = cure_name
+        return best_match
 
     def read(self, effect_box):
         if self._is_empty(effect_box):
@@ -402,7 +401,7 @@ class IngredientBoxReader:
                     non_empty_effect_idx = i
                     break
             id_info['effect_idx'] = non_empty_effect_idx
-            for key in ['effect_type', 'conc_range', 'conc_current']:
+            for key in ['effect_type', 'conc_range', 'conc_current', 'conc_optimal']:
                 id_info[key] = selected_effect[key]
 
         return effect_infos, id_info
