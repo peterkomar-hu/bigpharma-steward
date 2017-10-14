@@ -233,7 +233,7 @@ class EffectBoxReader:
                 conc_current = conc
         info = {
             'effect_type': effect_type,
-            'conc_rance': [conc_low, conc_high],
+            'conc_range': [conc_low, conc_high],
             'conc_optimal': conc_optimal,
             'conc_current': conc_current,
         }
@@ -346,14 +346,13 @@ class IngredientBoxReader:
         slider_width = 240
         x0 = 280
         x1 = x0 + slider_width
-        for i in [3, 0]:
+        for i in range(3, -1, -1):
             y0 = 161 + (i+1) * effect_box_height - slider_height
             y1 = y0 + slider_height
-            print(ingredient_box.shape)
-            print(y0,y1)
             if y0 > rmbox_y1 or y1 < rmbox_y0:
                 slider = ingredient_box[y0:y1, x0:x1, :]
-                return i, slider
+                if np.sum(bio.make_bw(slider) > 0) > 50:
+                    return i, slider
 
     def read(self, ingredient_box):
         find_remove_box_result = self._find_remove_box(ingredient_box)
@@ -375,9 +374,9 @@ class IngredientBoxReader:
 
         if find_remove_box_result is not None:
             remove_box, rmbox_y0, rmbox_y1 = find_remove_box_result
-            # effect_idx_of_id, id_slider = self._find_unobstructed_slider(ingredient_box, rmbox_y0, rmbox_y1)
-            # id_info = self.effect_box_reader.read(id_slider)
-            # id_info['effect_idx'] = effect_idx_of_id
+            effect_idx_of_id, id_slider = self._find_unobstructed_slider(ingredient_box, rmbox_y0, rmbox_y1)
+            id_info = self.effect_box_reader._read_slider(id_slider)
+            id_info['effect_idx'] = effect_idx_of_id
 
             effect_idx_of_remove = 3
             for i in range(3,0,-1):
@@ -394,8 +393,19 @@ class IngredientBoxReader:
                 remove_info = self.remove_box_reader.read(remove_box)
                 effect_info_w_remove['remove_machine'] = remove_info['machine']
                 effect_info_w_remove['remove_conc_range'] = remove_info['conc_range']
+        else:
+            id_info = {}
+            non_empty_effect_idx = None
+            for i in range(3, -1, -1):
+                selected_effect = effect_infos[i]
+                if selected_effect['effect_type'] != 'empty':
+                    non_empty_effect_idx = i
+                    break
+            id_info['effect_idx'] = non_empty_effect_idx
+            for key in ['effect_type', 'conc_range', 'conc_current']:
+                id_info[key] = selected_effect[key]
 
-        return effect_infos
+        return effect_infos, id_info
 
 
 def read_ingredients_screen(im):
@@ -410,8 +420,10 @@ def read_ingredients_screen(im):
 
     ingredient_box_reader = IngredientBoxReader()
     ingredients = []
+    id_infos = []
     for box in boxes:
-        effect_infos = ingredient_box_reader.read(box)
+        effect_infos, id_info = ingredient_box_reader.read(box)
         ingredients.append(effect_infos)
+        id_infos.append(id_info)
 
-    return ingredients
+    return ingredients, id_infos
