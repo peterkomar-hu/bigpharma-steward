@@ -25,16 +25,32 @@ class Effect:
         self.__dict__.update(d_sanitized)
 
     def is_consistent_with(self, other):
-        if self.type != other.type:
-            return False
-        d_self = self.__dict__
+        d = self.__dict__
         d_other = other.__dict__
-        for key in d_self:
-            if d_self[key] != d_other[key] and \
-               d_self is not None and \
-               d_other is not None:
-                return False
+        for k in d:
+            try:
+                for idx, item in enumerate(d[k]):
+                    other_item = d_other[k][idx]
+                    if item is not None and other_item is not None:
+                        if d[k][idx] != d_other[k][idx]:
+                            return False
+            except TypeError:
+                if d[k] is not None and d_other[k] is not None:
+                    if d[k] != d_other[k]:
+                        return False
         return True
+
+    def merge(self, other):
+        d = self.__dict__
+        d_other = other.__dict__
+        for k in d:
+            try:
+                for idx, item in enumerate(d[k]):
+                    if item is None:
+                        d[k][idx] = d_other[k][idx]
+            except TypeError:
+                if d[k] is None:
+                    d[k] = d_other[k]
 
 
 class Cure(Effect):
@@ -112,18 +128,12 @@ class Ingredient:
                 missing_info_list.append(': '.join(['eff ' + str(idx + 1), missing]))
         return missing_info_list
 
-    def id_match(self, id_info_dict):
-        mandatory_keys = ['conc_current', 'conc_range', 'effect_type', 'effect_idx']
-        for key in mandatory_keys:
-            assert key in id_info_dict
-        if id_info_dict['conc_current'] != self.conc:
-            return False
-        idx = id_info_dict['effect_idx']
-        stored_effect = self.effects[idx]
-        if id_info_dict['effect_type'] != stored_effect.type:
-            return False
-        if id_info_dict['conc_range'] != stored_effect.conc_range:
-            return False
+    def all_effect_types_known(self):
+        for effect in self.effects:
+            if effect is None:
+                return False
+            if effect.type is None:
+                return False
         return True
 
     def is_consistent_with(self, other):
@@ -139,3 +149,12 @@ class Ingredient:
             if self.effects[idx].is_consistent_with(other.effects[idx]) == False:
                 return False
         return True
+
+    def merge(self, other):
+        if self.conc is None:
+            self.conc = other.conc
+        for idx, _ in enumerate(self.effects):
+            if self.effects[idx] is None:
+                self.effects[idx] = other.effects[idx]
+            elif other.effects[idx] is not None:
+                self.effects[idx].merge(other.effects[idx])
