@@ -160,7 +160,8 @@ class EffectBoxReader:
 
             'red': [232, 88, 88],
             'red_conc': [244, 177, 177],
-            'red_max': [232, 88, 228]
+            'red_max': [232, 88, 228],
+            'red_conc_and_max': [244, 177, 242]
         }
         self.catalyst_palette = {
             'green': [144, 231, 150],
@@ -213,30 +214,35 @@ class EffectBoxReader:
 
         if 'green' in colors:
             effect_colors = {'green', 'green_max'}
-            max_color = 'green_max'
-            conc_color = 'gray_conc'
+            max_colors = {'green_max'}
+            conc_colors = {'gray_conc'}
             effect_type = 'cure'
         elif 'crimson' in colors:
             effect_colors = {'crimson', 'crimson_max'}
-            max_color = 'crimson_max'
-            conc_color = 'gray_conc'
+            max_colors = {'crimson_max'}
+            conc_colors = {'gray_conc'}
             effect_type = 'side-effect'
         elif 'red' in colors:
-            effect_colors = {'red', 'red_max'}
-            max_color = 'red_max'
-            conc_color = 'red_conc'
+            effect_colors = {'red', 'red_max', 'red_conc', 'red_conc_and_max'}
+            max_colors = {'red_max', 'red_conc_and_max'}
+            conc_colors = {'red_conc', 'red_conc_and_max'}
             effect_type = 'side-effect'
+        else:
+            return {}
 
         conc_low = None
+        conc_high = None
+        conc_optimal = None
+        conc_current = None
         for idx, cname in enumerate(colors):
             conc = idx + 1
             if cname in effect_colors:
                 conc_high = conc
                 if conc_low is None:
                     conc_low = conc
-                if cname == max_color:
+                if cname in max_colors:
                     conc_optimal = conc
-            elif cname == conc_color:
+            if cname in conc_colors:
                 conc_current = conc
         info = {
             'effect_type': effect_type,
@@ -392,6 +398,7 @@ class IngredientBoxReader:
                 remove_info = self.remove_box_reader.read(remove_box)
                 effect_info_w_remove['remove_machine'] = remove_info['machine']
                 effect_info_w_remove['remove_conc_range'] = remove_info['conc_range']
+            effect_info_w_remove['effect_type'] = 'side-effect'
         else:
             id_info = {}
             non_empty_effect_idx = None
