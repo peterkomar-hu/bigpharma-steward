@@ -1,3 +1,7 @@
+import json
+import basic_image_operations as bio
+import analyze_ingredients_screen as ais
+
 class Effect:
     def __init__(self, effect_type='empty'):
         self.type = effect_type
@@ -16,7 +20,7 @@ class Effect:
 
         return missing
 
-    def update_from_dict(self, d_raw):
+    def load_from_dict(self, d_raw):
         valid_attributes = self.__dict__.keys()
         d_sanitized = {}
         for k in valid_attributes:
@@ -94,7 +98,7 @@ class Ingredient:
         self.conc = None
         self.effects = [None, None, None, None]
 
-    def update_from_dict_list(self, dict_list):
+    def load_from_dict_list(self, dict_list):
         for idx, effect_dict in enumerate(dict_list):
             if 'effect_type' not in effect_dict: continue
             effect_type = effect_dict['effect_type']
@@ -107,14 +111,14 @@ class Ingredient:
                 elif effect_type == 'side-effect':
                     new_effect = SideEffect()
 
-                new_effect.update_from_dict(effect_dict)
+                new_effect.load_from_dict(effect_dict)
                 self.effects[idx] = new_effect
 
                 if self.conc is None and 'conc_current' in effect_dict:
                     self.conc = effect_dict['conc_current']
 
             else:
-                self.effects[idx].update_from_dict(effect_dict)
+                self.effects[idx].load_from_dict(effect_dict)
 
     def missing(self):
         missing_info_list = []
@@ -158,3 +162,49 @@ class Ingredient:
                 self.effects[idx] = other.effects[idx]
             elif other.effects[idx] is not None:
                 self.effects[idx].merge(other.effects[idx])
+
+
+class IngredientCollection:
+    def __init__(self):
+        self.ingredients = []
+        self.unmatched_ingredients = []
+
+    def __repr__(self):
+        return json.dumps(self, default=lambda o: o.__dict__,
+                          indent=4, separators=(', ', ': '))
+
+    def load_from_file(self, path):
+        pass
+
+    def save_to_file(self, path):
+        with open(path, 'w') as fout:
+            fout.write(self.__repr__())
+
+    def update_from_screenshot(self, im_path):
+        im = bio.load_image(im_path)
+        if bio.identify_image(im) != 'ingredients':
+            print(im_path + ' is not a screenshot of the Ingredients screen.')
+            return None
+        for ingredient_data in ais.read_ingredients_screen(im):
+            ingr = Ingredient()
+            ingr.load_from_dict_list(ingredient_data)
+
+            matching_idx = None
+            for idx, stored_ingr in enumerate(self.ingredients):
+                if ingr.is_consistent_with(stored_ingr):
+                    matching_idx = idx
+                    break
+            if matching_idx is not None:
+                self.ingredients[matching_idx].merge(ingr)
+            elif ingr.all_effect_types_known():
+                unmatched_remaining = []
+                for unmatched_ingr in self.unmatched_ingredients:
+                    if ingr.is_consistent_with(unmatched_ingr):
+                        ingr.merge(unmatched_ingr)
+                    else:
+                        unmatched_remaining.append(unmatched_ingr)
+                self.unmatched_ingredients = unmatched_remaining
+                self.ingredients.append(ingr)
+
+            else:
+                self.unmatched_ingredients.append(ingr)
