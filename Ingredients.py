@@ -24,7 +24,19 @@ class Effect:
                 d_sanitized[k] = d_raw[k]
         self.__dict__.update(d_sanitized)
 
+    def is_consistent_with(self, other):
+        if self.type != other.type:
+            return False
+        d_self = self.__dict__
+        d_other = other.__dict__
+        for key in d_self:
+            if d_self[key] != d_other[key] and \
+               d_self is not None and \
+               d_other is not None:
+                return False
+        return True
 
+                
 class Cure(Effect):
     def __init__(self):
         Effect.__init__(self, effect_type='cure')
