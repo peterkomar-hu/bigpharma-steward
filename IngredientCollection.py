@@ -100,8 +100,12 @@ class Ingredient:
 
     def load_from_dict_list(self, dict_list):
         for idx, effect_dict in enumerate(dict_list):
-            if 'effect_type' not in effect_dict: continue
-            effect_type = effect_dict['effect_type']
+            if 'effect_type' in effect_dict:
+                effect_type = effect_dict['effect_type']
+            elif 'type' in effect_dict:
+                effect_type = effect_dict['type']
+            else:
+                continue
 
             if self.effects[idx] is None:
                 if effect_type == 'empty':
@@ -119,6 +123,12 @@ class Ingredient:
 
             else:
                 self.effects[idx].load_from_dict(effect_dict)
+
+    def load_from_json_dict(self, json_dict):
+        assert sorted(json_dict.keys()) == sorted(self.__dict__.keys())
+        self.conc = int(json_dict['conc'])
+        print(json_dict['effects'])
+        self.load_from_dict_list(json_dict['effects'])
 
     def missing(self):
         missing_info_list = []
@@ -166,6 +176,7 @@ class Ingredient:
 
 class IngredientCollection:
     def __init__(self):
+        self.processed_screenshots = []
         self.ingredients = []
         self.unmatched_ingredients = []
 
@@ -174,17 +185,35 @@ class IngredientCollection:
                           indent=4, separators=(', ', ': '))
 
     def load_from_file(self, path):
-        pass
+        with open(path, 'r') as fin:
+            data_dict = json.loads(fin.read())
+
+        assert sorted(data_dict.keys()) == sorted(self.__dict__.keys())
+
+        self.processed_screenshots = data_dict['processed_screenshots']
+        for ingr_dict_list in data_dict['ingredients']:
+            ingr = Ingredient()
+            ingr.load_from_json_dict(ingr_dict_list)
+            self.ingredients.append(ingr)
+        for ingr_dict_list in data_dict['unmatched_ingredients']:
+            ingr = Ingredient()
+            ingr.load_from_json_dict(ingr_dict_list)
+            self.unmatched_ingredients.append(ingr)
 
     def save_to_file(self, path):
         with open(path, 'w') as fout:
             fout.write(self.__repr__())
 
     def update_from_screenshot(self, im_path):
+        if im_path in self.processed_screenshots:
+            print('"' + im_path + '" has already been processed.')
+            return None
+
         im = bio.load_image(im_path)
         if bio.identify_image(im) != 'ingredients':
             print(im_path + ' is not a screenshot of the Ingredients screen.')
             return None
+        self.processed_screenshots.append(im_path)
         for ingredient_data in ais.read_ingredients_screen(im):
             ingr = Ingredient()
             ingr.load_from_dict_list(ingredient_data)
